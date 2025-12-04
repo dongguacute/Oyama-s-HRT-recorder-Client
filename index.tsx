@@ -8,7 +8,7 @@ import {
 import {
     Plus, Trash2, Syringe, Pill, Droplet, Sticker, X, 
     Settings, ChevronDown, ChevronUp, Save, Clock, Languages, Calendar,
-    Activity, Info, ZoomIn, RotateCcw, Menu, Download, Upload, QrCode, Camera, Image as ImageIcon, Copy
+    Activity, Info, ZoomIn, RotateCcw, Menu, Download, Upload, QrCode, Camera, Image as ImageIcon, Copy, Github
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import jsQR from 'jsqr';
@@ -37,14 +37,15 @@ const TRANSLATIONS = {
         "timeline.delete_confirm": "确定删除这条记录吗？",
         "timeline.dose_label": "剂量",
         "timeline.bio_label": "生物 E2",
-        "drawer.title": "剂量管理工具",
-        "drawer.desc": "管理剂量数据。",
+        "drawer.title": "实用工具",
         "drawer.clear": "清空所有剂量",
         "drawer.clear_confirm": "删除所有记录？不可撤销。",
         "drawer.save": "保存剂量 JSON",
         "drawer.save_hint": "下载 JSON 备份。",
         "drawer.import": "导入剂量 JSON",
         "drawer.import_hint": "导入 JSON 并覆盖。",
+        "drawer.github": "GitHub 仓库",
+        "drawer.github_desc": "查看源代码与反馈。",
         "drawer.empty_export": "当前没有可保存的剂量记录。",
         "drawer.import_error": "导入失败，请确认文件内容有效。",
         "drawer.import_success": "导入成功，已更新剂量记录。",
@@ -79,6 +80,10 @@ const TRANSLATIONS = {
         "btn.save": "保存",
         "btn.cancel": "取消",
         "btn.edit": "编辑",
+        "btn.ok": "确定",
+
+        "dialog.confirm_title": "确认",
+        "dialog.alert_title": "提示",
 
         "modal.weight.title": "设置体重",
         "modal.weight.desc": "用于估算浓度峰值。",
@@ -116,6 +121,10 @@ const TRANSLATIONS = {
         "ester.EN": "庚酸雌二醇 (EN)",
         "drawer.lang": "语言设置",
         "drawer.lang_hint": "切换界面显示语言。",
+        "drawer.model_title": "底层模型详解",
+        "drawer.model_desc": "了解估算背后的药代动力学模型。",
+        "drawer.model_confirm": "即将访问第三方网站 (misaka23323.com)，是否继续？",
+        "drawer.github_confirm": "即将访问第三方网站 (github.com)，是否继续？",
     },
     en: {
         "app.title": "HRT Recorder",
@@ -131,14 +140,15 @@ const TRANSLATIONS = {
         "timeline.delete_confirm": "Are you sure you want to delete this record?",
         "timeline.dose_label": "Dose",
         "timeline.bio_label": "Bio E2",
-        "drawer.title": "Dose Utilities",
-        "drawer.desc": "Manage dosage history.",
+        "drawer.title": "Utilities",
         "drawer.clear": "Clear All Dosages",
         "drawer.clear_confirm": "Clear all? Irreversible.",
         "drawer.save": "Save Dosages (JSON)",
         "drawer.save_hint": "Download JSON backup.",
         "drawer.import": "Import Dosages (JSON)",
         "drawer.import_hint": "Import JSON & overwrite.",
+        "drawer.github": "GitHub Repository",
+        "drawer.github_desc": "View source code & feedback.",
         "drawer.empty_export": "There are no dosages to export yet.",
         "drawer.import_error": "Import failed. Please check that the file is valid.",
         "drawer.import_success": "Imported dosages successfully.",
@@ -173,6 +183,10 @@ const TRANSLATIONS = {
         "btn.save": "Save",
         "btn.cancel": "Cancel",
         "btn.edit": "Edit",
+        "btn.ok": "OK",
+
+        "dialog.confirm_title": "Confirm",
+        "dialog.alert_title": "Alert",
 
         "modal.weight.title": "Body Weight",
         "modal.weight.desc": "Affects peak concentration estimates.",
@@ -210,6 +224,10 @@ const TRANSLATIONS = {
         "ester.EN": "Estradiol Enanthate (EN)",
         "drawer.lang": "Language",
         "drawer.lang_hint": "Switch interface language.",
+        "drawer.model_title": "Model Explanation",
+        "drawer.model_desc": "Learn about the underlying PK model.",
+        "drawer.model_confirm": "You are about to visit a third-party website (misaka23323.com). Continue?",
+        "drawer.github_confirm": "You are about to visit a third-party website (github.com). Continue?",
     },
     ru: {
         "app.title": "HRT Recorder",
@@ -225,14 +243,15 @@ const TRANSLATIONS = {
         "timeline.delete_confirm": "Вы уверены, что хотите удалить эту запись?",
         "timeline.dose_label": "Доза",
         "timeline.bio_label": "Био E2",
-        "drawer.title": "Управление дозами",
-        "drawer.desc": "Управление историей доз.",
+        "drawer.title": "Инструменты",
         "drawer.clear": "Очистить все дозы",
         "drawer.clear_confirm": "Удалить все? Нельзя отменить.",
         "drawer.save": "Сохранить дозы (JSON)",
         "drawer.save_hint": "Скачать резервную копию JSON.",
         "drawer.import": "Импортировать дозы (JSON)",
         "drawer.import_hint": "Импорт JSON с заменой.",
+        "drawer.github": "GitHub репозиторий",
+        "drawer.github_desc": "Исходный код и отзывы.",
         "drawer.empty_export": "Нет доз для экспорта.",
         "drawer.import_error": "Ошибка импорта. Пожалуйста, проверьте правильность файла.",
         "drawer.import_success": "Дозы успешно импортированы.",
@@ -241,6 +260,10 @@ const TRANSLATIONS = {
         "drawer.qr_hint": "QR-код для обмена/восстановления.",
         "drawer.lang": "Язык",
         "drawer.lang_hint": "Переключить язык интерфейса.",
+        "drawer.model_title": "Описание модели",
+        "drawer.model_desc": "Узнайте о модели фармакокинетики.",
+        "drawer.model_confirm": "Вы переходите на сторонний сайт (misaka23323.com). Продолжить?",
+        "drawer.github_confirm": "Вы переходите на сторонний сайт (github.com). Продолжить?",
         "import.title": "Импорт данных",
         "import.text": "Вставить текст JSON",
         "import.paste_hint": "Вставьте содержимое JSON сюда...",
@@ -269,6 +292,10 @@ const TRANSLATIONS = {
         "btn.save": "Сохранить",
         "btn.cancel": "Отмена",
         "btn.edit": "Редактировать",
+        "btn.ok": "ОК",
+
+        "dialog.confirm_title": "Подтверждение",
+        "dialog.alert_title": "Внимание",
 
         "modal.weight.title": "Вес тела",
         "modal.weight.desc": "Влияет на оценку пиковой концентрации.",
@@ -331,6 +358,78 @@ const LanguageProvider = ({ children }: { children: React.ReactNode }) => {
         <LanguageContext.Provider value={{ lang, setLang, t }}>
             {children}
         </LanguageContext.Provider>
+    );
+};
+
+// --- Dialog Context ---
+
+type DialogType = 'alert' | 'confirm';
+
+interface DialogContextType {
+    showDialog: (type: DialogType, message: string, onConfirm?: () => void) => void;
+}
+
+const DialogContext = createContext<DialogContextType | null>(null);
+
+const useDialog = () => {
+    const ctx = useContext(DialogContext);
+    if (!ctx) throw new Error("useDialog must be used within DialogProvider");
+    return ctx;
+};
+
+const DialogProvider = ({ children }: { children: React.ReactNode }) => {
+    const { t } = useTranslation();
+    const [isOpen, setIsOpen] = useState(false);
+    const [type, setType] = useState<DialogType>('alert');
+    const [message, setMessage] = useState("");
+    const [onConfirm, setOnConfirm] = useState<(() => void) | null>(null);
+
+    const showDialog = useCallback((type: DialogType, message: string, onConfirm?: () => void) => {
+        setType(type);
+        setMessage(message);
+        setOnConfirm(() => onConfirm || null);
+        setIsOpen(true);
+    }, []);
+
+    const handleConfirm = () => {
+        if (onConfirm) onConfirm();
+        setIsOpen(false);
+    };
+
+    return (
+        <DialogContext.Provider value={{ showDialog }}>
+            {children}
+            {isOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4" style={{ animation: 'dialogFadeIn 0.2s ease-out forwards' }}>
+                    <style>{`
+                        @keyframes dialogFadeIn { from { opacity: 0; } to { opacity: 1; } }
+                        @keyframes dialogZoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+                    `}</style>
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-100" style={{ animation: 'dialogZoomIn 0.2s ease-out forwards' }}>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">
+                            {type === 'confirm' ? t('dialog.confirm_title') : t('dialog.alert_title')}
+                        </h3>
+                        <p className="text-gray-600 mb-6 leading-relaxed text-sm">{message}</p>
+                        <div className="flex gap-3">
+                            {type === 'confirm' && (
+                                <button 
+                                    onClick={() => setIsOpen(false)} 
+                                    className="flex-1 py-3 text-gray-600 font-bold bg-gray-100 rounded-xl hover:bg-gray-200 transition"
+                                >
+                                    {t('btn.cancel')}
+                                </button>
+                            )}
+                            <button 
+                                onClick={handleConfirm} 
+                                className="flex-1 py-3 bg-pink-400 text-white font-bold rounded-xl hover:bg-pink-500 shadow-lg shadow-pink-100 transition"
+                            >
+                                {t('btn.ok')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </DialogContext.Provider>
     );
 };
 
@@ -429,6 +528,7 @@ const CustomSelect = ({ value, onChange, options, label }: { value: string, onCh
 
 const WeightEditorModal = ({ isOpen, onClose, currentWeight, onSave }: any) => {
     const { t } = useTranslation();
+    const { showDialog } = useDialog();
     const [weightStr, setWeightStr] = useState(currentWeight.toString());
 
     useEffect(() => setWeightStr(currentWeight.toString()), [currentWeight, isOpen]);
@@ -439,7 +539,7 @@ const WeightEditorModal = ({ isOpen, onClose, currentWeight, onSave }: any) => {
             onSave(val);
             onClose();
         } else {
-            alert(t('error.nonPositive'));
+            showDialog('alert', t('error.nonPositive'));
         }
     };
 
@@ -482,6 +582,7 @@ const WeightEditorModal = ({ isOpen, onClose, currentWeight, onSave }: any) => {
 
 const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
     const { t } = useTranslation();
+    const { showDialog } = useDialog();
     
     // Form State
     const [dateStr, setDateStr] = useState("");
@@ -645,14 +746,14 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
         if (route === Route.patchApply && patchMode === "rate") {
             const rateVal = parseFloat(patchRate);
             if (!Number.isFinite(rateVal) || rateVal <= 0) {
-                alert(nonPositiveMsg);
+                showDialog('alert', nonPositiveMsg);
                 return;
             }
             finalDose = 0;
             extras[ExtraKey.releaseRateUGPerDay] = rateVal;
         } else if (route !== Route.patchRemove) {
             if (!Number.isFinite(bioDoseVal) || bioDoseVal <= 0 || bioMultiplier <= 0) {
-                alert(nonPositiveMsg);
+                showDialog('alert', nonPositiveMsg);
                 return;
             }
             finalDose = bioDoseVal / bioMultiplier;
@@ -1422,6 +1523,7 @@ const ResultChart = ({ sim }: { sim: SimulationResult | null }) => {
 
 const AppContent = () => {
     const { t, lang, setLang } = useTranslation();
+    const { showDialog } = useDialog();
 
     const [events, setEvents] = useState<DoseEvent[]>(() => {
         const saved = localStorage.getItem('hrt-events');
@@ -1522,11 +1624,11 @@ const AppContent = () => {
             if (newEvents.length > 0) setEvents(newEvents);
             if (newWeight !== undefined) setWeight(newWeight);
 
-            alert(t('drawer.import_success'));
+            showDialog('alert', t('drawer.import_success'));
             return true;
         } catch (err) {
             console.error(err);
-            alert(t('drawer.import_error'));
+            showDialog('alert', t('drawer.import_error'));
             return false;
         }
     };
@@ -1552,21 +1654,21 @@ const AppContent = () => {
     };
 
     const handleDeleteEvent = (id: string) => {
-        if (confirm(t('timeline.delete_confirm'))) {
+        showDialog('confirm', t('timeline.delete_confirm'), () => {
             setEvents(prev => prev.filter(e => e.id !== id));
-        }
+        });
     };
 
     const handleClearAllEvents = () => {
         if (!events.length) return;
-        if (confirm(t('drawer.clear_confirm'))) {
+        showDialog('confirm', t('drawer.clear_confirm'), () => {
             setEvents([]);
-        }
+        });
     };
 
     const handleSaveDosages = () => {
         if (events.length === 0) {
-            alert(t('drawer.empty_export'));
+            showDialog('alert', t('drawer.empty_export'));
             return;
         }
         const exportData = {
@@ -1751,7 +1853,6 @@ const AppContent = () => {
                 <div className="p-6 border-b border-gray-100 flex items-start justify-between">
                     <div>
                         <p className="text-xs font-semibold text-pink-400 uppercase tracking-wide">{t('drawer.title')}</p>
-                        <p className="text-sm text-gray-500 mt-1 leading-relaxed">{t('drawer.desc')}</p>
                     </div>
                     <button
                         onClick={() => setIsDrawerOpen(false)}
@@ -1812,6 +1913,21 @@ const AppContent = () => {
                     </button>
 
                     <button
+                        onClick={() => {
+                            showDialog('confirm', t('drawer.model_confirm'), () => {
+                                window.open('https://misaka23323.com/articles/estrogen-model-summary', '_blank');
+                            });
+                        }}
+                        className="w-full flex items-center gap-3 p-4 rounded-2xl border border-gray-200 hover:border-purple-200 hover:bg-purple-50 transition"
+                    >
+                        <Info className="text-purple-500" size={20} />
+                        <div className="text-left">
+                            <p className="font-bold text-gray-900 text-sm">{t('drawer.model_title')}</p>
+                            <p className="text-xs text-gray-500">{t('drawer.model_desc')}</p>
+                        </div>
+                    </button>
+
+                    <button
                         onClick={handleClearAllEvents}
                         disabled={!events.length}
                         className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition ${events.length ? 'border-gray-200 hover:border-red-200 hover:bg-red-50' : 'border-gray-100 bg-gray-50 cursor-not-allowed opacity-60'}`}
@@ -1820,6 +1936,21 @@ const AppContent = () => {
                         <div className="text-left">
                             <p className="font-bold text-gray-900 text-sm">{t('drawer.clear')}</p>
                             <p className="text-xs text-gray-500">{t('drawer.clear_confirm')}</p>
+                        </div>
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            showDialog('confirm', t('drawer.github_confirm'), () => {
+                                window.open('https://github.com/SmirnovaOyama/Oyama-s-HRT-recorder', '_blank');
+                            });
+                        }}
+                        className="w-full flex items-center gap-3 p-4 rounded-2xl border border-gray-200 hover:border-gray-800 hover:bg-gray-50 transition"
+                    >
+                        <Github className="text-gray-700" size={20} />
+                        <div className="text-left">
+                            <p className="font-bold text-gray-900 text-sm">{t('drawer.github')}</p>
+                            <p className="text-xs text-gray-500">{t('drawer.github_desc')}</p>
                         </div>
                     </button>
                 </div>
@@ -1839,7 +1970,9 @@ const AppContent = () => {
 
 const App = () => (
     <LanguageProvider>
-        <AppContent />
+        <DialogProvider>
+            <AppContent />
+        </DialogProvider>
     </LanguageProvider>
 );
 

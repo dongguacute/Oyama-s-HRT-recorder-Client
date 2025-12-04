@@ -83,7 +83,7 @@ export const OralPK = {
     kAbsSL: 1.8
 };
 
-// Define deterministic order for mapping integer tiers (0-3) to keys
+// Define deterministic order for mapping integer tiers (0-3)   to keys
 export const SL_TIER_ORDER = ["quick", "casual", "standard", "strict"] as const;
 
 export const SublingualTierParams = {
