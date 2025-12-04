@@ -33,7 +33,8 @@ const TRANSLATIONS = {
         "timeline.title": "用药记录",
         "timeline.empty": "暂无记录，请点击右下角添加",
         "timeline.delete_confirm": "确定删除这条记录吗？",
-        "timeline.bio_suffix": "mg (生物 E2)",
+        "timeline.dose_label": "剂量",
+        "timeline.bio_label": "生物 E2",
         "drawer.title": "剂量管理工具",
         "drawer.desc": "导出、备份、清空或导入剂量记录。",
         "drawer.clear": "清空所有剂量",
@@ -100,7 +101,8 @@ const TRANSLATIONS = {
         "timeline.title": "Dose History",
         "timeline.empty": "No records yet. Tap + to add.",
         "timeline.delete_confirm": "Are you sure you want to delete this record?",
-        "timeline.bio_suffix": "mg (Bio E2)",
+        "timeline.dose_label": "Dose",
+        "timeline.bio_label": "Bio E2",
         "drawer.title": "Dose Utilities",
         "drawer.desc": "Export, backup, clear, or import your dosage history.",
         "drawer.clear": "Clear All Dosages",
@@ -208,6 +210,14 @@ const getRouteIcon = (route: Route) => {
 const getBioDoseMG = (event: DoseEvent) => {
     const multiplier = getBioavailabilityMultiplier(event.route, event.ester, event.extras || {});
     return multiplier * event.doseMG;
+};
+
+const getRawDoseMG = (event: DoseEvent) => {
+    if (event.route === Route.patchRemove) return null;
+    if (event.extras[ExtraKey.releaseRateUGPerDay]) return null;
+    const factor = getToE2Factor(event.ester);
+    if (!factor) return event.doseMG;
+    return event.doseMG / factor;
 };
 
 // --- Components ---
@@ -1188,14 +1198,20 @@ const AppContent = () => {
                                                 </div>
                                                 <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
                                                      <span className="truncate">{t(`route.${ev.route}`).split('(')[0]}</span>
-                                                     {ev.route !== Route.patchRemove && <span className="text-gray-300">•</span>}
-                                                     <span className="text-gray-700">
-                                                        {ev.route === Route.patchRemove ? "" : (
-                                                            ev.extras[ExtraKey.releaseRateUGPerDay] 
-                                                                ? `${ev.extras[ExtraKey.releaseRateUGPerDay]} µg/d`
-                                                                : `${getBioDoseMG(ev).toFixed(2)} ${t('timeline.bio_suffix')}`
-                                                        )}
-                                                     </span>
+                                                     {ev.route !== Route.patchRemove && (
+                                                        <>
+                                                            <span className="text-gray-300">•</span>
+                                                            {ev.extras[ExtraKey.releaseRateUGPerDay] ? (
+                                                                <span className="text-gray-700">{`${ev.extras[ExtraKey.releaseRateUGPerDay]} µg/d`}</span>
+                                                            ) : (
+                                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-700">
+                                                                    <span>{`${t('timeline.dose_label')}: ${((getRawDoseMG(ev) ?? 0)).toFixed(2)} mg`}</span>
+                                                                    <span className="text-gray-300">•</span>
+                                                                    <span>{`${t('timeline.bio_label')}: ${getBioDoseMG(ev).toFixed(2)} mg`}</span>
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                     )}
                                                 </div>
                                             </div>
                                             
