@@ -371,6 +371,62 @@ const getRawDoseMG = (event: DoseEvent) => {
 
 // --- Components ---
 
+const CustomSelect = ({ value, onChange, options, label }: { value: string, onChange: (val: string) => void, options: { value: string, label: string, icon?: React.ReactNode }[], label?: string }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectedOption = options.find(o => o.value === value);
+
+    return (
+        <div className="space-y-2" ref={containerRef}>
+            {label && <label className="block text-sm font-bold text-gray-700">{label}</label>}
+            <div className="relative">
+                <button
+                    type="button"
+                    onClick={() => setIsOpen(!isOpen)}
+                    className="w-full p-4 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-300 outline-none flex items-center justify-between transition-all"
+                >
+                    <div className="flex items-center gap-2">
+                        {selectedOption?.icon}
+                        <span className="font-medium text-gray-800">{selectedOption?.label || value}</span>
+                    </div>
+                    <ChevronDown size={20} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {isOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+                        {options.map(opt => (
+                            <button
+                                key={opt.value}
+                                onClick={() => {
+                                    onChange(opt.value);
+                                    setIsOpen(false);
+                                }}
+                                className={`w-full p-3 text-left flex items-center gap-2 hover:bg-pink-50 transition-colors
+                                    ${opt.value === value ? 'bg-pink-50 text-pink-600 font-bold' : 'text-gray-700'}`}
+                            >
+                                {opt.icon}
+                                <span>{opt.label}</span>
+                                {opt.value === value && <div className="ml-auto w-2 h-2 rounded-full bg-pink-400" />}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const WeightEditorModal = ({ isOpen, onClose, currentWeight, onSave }: any) => {
     const { t } = useTranslation();
     const [weightStr, setWeightStr] = useState(currentWeight.toString());
@@ -650,7 +706,7 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto transform transition-all scale-100 flex flex-col">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md h-[85vh] max-h-[90vh] transform transition-all scale-100 flex flex-col overflow-hidden">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                     <h3 className="text-xl font-bold text-gray-900">
                         {eventToEdit ? t('modal.dose.edit_title') : t('modal.dose.add_title')}
@@ -676,41 +732,30 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
                     </div>
 
                     {/* Route */}
-                    <div className="space-y-2">
-                        <label className="block text-sm font-bold text-gray-700">{t('field.route')}</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            {Object.values(Route).map(r => (
-                                <button
-                                    key={r}
-                                    onClick={() => setRoute(r)}
-                                    className={`p-3 rounded-xl text-sm font-medium border transition-all flex items-center justify-center gap-2
-                                        ${route === r 
-                                            ? 'bg-pink-50 border-pink-300 text-pink-500 shadow-sm' 
-                                            : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}
-                                >
-                                    {getRouteIcon(r)}
-                                    {t(`route.${r}`).split('(')[0].trim()}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                    <CustomSelect
+                        label={t('field.route')}
+                        value={route}
+                        onChange={(val) => setRoute(val as Route)}
+                        options={Object.values(Route).map(r => ({
+                            value: r,
+                            label: t(`route.${r}`).split('(')[0].trim(),
+                            icon: getRouteIcon(r)
+                        }))}
+                    />
 
                     {route !== Route.patchRemove && (
                         <>
                             {/* Ester Selection */}
                             {availableEsters.length > 1 && (
-                                <div className="space-y-2">
-                                    <label className="block text-sm font-bold text-gray-700">{t('field.ester')}</label>
-                                    <select 
-                                        value={ester} 
-                                        onChange={e => setEster(e.target.value as Ester)} 
-                                        className="w-full p-4 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-300 outline-none appearance-none"
-                                    >
-                                        {availableEsters.map(e => (
-                                            <option key={e} value={e}>{t(`ester.${e}`)}</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <CustomSelect
+                                    label={t('field.ester')}
+                                    value={ester}
+                                    onChange={(val) => setEster(val as Ester)}
+                                    options={availableEsters.map(e => ({
+                                        value: e,
+                                        label: t(`ester.${e}`),
+                                    }))}
+                                />
                             )}
 
                             {/* Patch Mode */}
