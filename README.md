@@ -2,8 +2,6 @@
 
 A privacy-focused, web-based tool for simulating and tracking estradiol levels during Hormone Replacement Therapy (HRT). 
 
-> **✨ Created via Gemini 3 Vibe Coding**
-
 ## 🧠 Algorithm & Core Logic
 
 The pharmacokinetic algorithms, mathematical models, and parameters used in this simulation are derived directly from the **[HRT-Recorder-PKcomponent-Test](https://github.com/LaoZhong-Mihari/HRT-Recorder-PKcomponent-Test)** repository.
