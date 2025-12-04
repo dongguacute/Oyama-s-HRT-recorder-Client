@@ -93,6 +93,42 @@ export const SublingualTierParams = {
     strict: { theta: 0.18, hold: 15 }
 };
 
+export function getBioavailabilityMultiplier(
+    route: Route,
+    ester: Ester,
+    extras: Partial<Record<ExtraKey, number>> = {}
+): number {
+    switch (route) {
+        case Route.injection: {
+            const formation = InjectionPK.formationFraction[ester] ?? 0.08;
+            return formation * getToE2Factor(ester);
+        }
+        case Route.oral:
+            return OralPK.bioavailability;
+        case Route.sublingual: {
+            let theta = 0.11;
+            if (extras[ExtraKey.sublingualTheta] !== undefined) {
+                const customTheta = extras[ExtraKey.sublingualTheta];
+                if (typeof customTheta === 'number' && Number.isFinite(customTheta)) {
+                    theta = Math.min(1, Math.max(0, customTheta));
+                }
+            } else if (extras[ExtraKey.sublingualTier] !== undefined) {
+                const tierIdx = Math.round(extras[ExtraKey.sublingualTier]!);
+                const tierKey = SL_TIER_ORDER[tierIdx] || 'standard';
+                theta = SublingualTierParams[tierKey]?.theta ?? 0.11;
+            }
+            return theta + (1 - theta) * OralPK.bioavailability;
+        }
+        case Route.gel:
+            return 0.05;
+        case Route.patchApply:
+            return 1.0;
+        case Route.patchRemove:
+        default:
+            return 0;
+    }
+}
+
 // --- Math Models ---
 
 interface PKParams {

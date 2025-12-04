@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import {
     DoseEvent, Route, Ester, ExtraKey, SimulationResult,
-    runSimulation, interpolateConcentration, getToE2Factor, EsterInfo, SublingualTierParams, CorePK, SL_TIER_ORDER
+    runSimulation, interpolateConcentration, getToE2Factor, EsterInfo, SublingualTierParams, CorePK, SL_TIER_ORDER,
+    getBioavailabilityMultiplier
 } from './logic.ts';
 
 // --- Localization ---
@@ -32,6 +33,7 @@ const TRANSLATIONS = {
         "timeline.title": "用药记录",
         "timeline.empty": "暂无记录，请点击右下角添加",
         "timeline.delete_confirm": "确定删除这条记录吗？",
+        "timeline.bio_suffix": "mg (生物 E2)",
         "drawer.title": "剂量管理工具",
         "drawer.desc": "导出、备份、清空或导入剂量记录。",
         "drawer.clear": "清空所有剂量",
@@ -44,6 +46,7 @@ const TRANSLATIONS = {
         "drawer.import_error": "导入失败，请确认文件内容有效。",
         "drawer.import_success": "导入成功，已更新剂量记录。",
         "drawer.close": "关闭侧栏",
+        "error.nonPositive": "不能输入小于等于0的值",
         
         "btn.add": "新增给药",
         "btn.save": "保存记录",
@@ -59,7 +62,7 @@ const TRANSLATIONS = {
         "field.route": "给药途径",
         "field.ester": "药物种类",
         "field.dose_raw": "药物剂量 (mg)",
-        "field.dose_e2": "等效 E2 (mg)",
+        "field.dose_e2": "生物可利用 E2 (mg)",
         "field.patch_mode": "输入模式",
         "field.patch_rate": "释放速率 (µg/天)",
         "field.patch_total": "总剂量 (mg)",
@@ -77,7 +80,7 @@ const TRANSLATIONS = {
         "route.sublingual": "舌下 (Sublingual)",
         "route.gel": "凝胶 (Gel)",
         "route.patchApply": "贴片 (Patch Apply)",
-        "route.patchRemove": "移除贴片 (Remove)",
+        "route.patchRemove": "贴片",
 
         "ester.E2": "雌二醇 (E2)",
         "ester.EV": "戊酸雌二醇 (EV)",
@@ -97,6 +100,7 @@ const TRANSLATIONS = {
         "timeline.title": "Dose History",
         "timeline.empty": "No records yet. Tap + to add.",
         "timeline.delete_confirm": "Are you sure you want to delete this record?",
+        "timeline.bio_suffix": "mg (Bio E2)",
         "drawer.title": "Dose Utilities",
         "drawer.desc": "Export, backup, clear, or import your dosage history.",
         "drawer.clear": "Clear All Dosages",
@@ -109,6 +113,7 @@ const TRANSLATIONS = {
         "drawer.import_error": "Import failed. Please check that the file is valid.",
         "drawer.import_success": "Imported dosages successfully.",
         "drawer.close": "Close Panel",
+        "error.nonPositive": "Value must be greater than zero.",
 
         "btn.add": "Add Dose",
         "btn.save": "Save Record",
@@ -124,7 +129,7 @@ const TRANSLATIONS = {
         "field.route": "Route",
         "field.ester": "Compound",
         "field.dose_raw": "Dose (mg)",
-        "field.dose_e2": "E2 Equivalent (mg)",
+        "field.dose_e2": "Bioavailable E2 (mg)",
         "field.patch_mode": "Input Mode",
         "field.patch_rate": "Rate (µg/day)",
         "field.patch_total": "Total Dose (mg)",
@@ -132,17 +137,17 @@ const TRANSLATIONS = {
         "field.sl_custom": "Custom θ",
 
         "sl.instructions": "While holding the tablet for the suggested time, try to swallow as little saliva as possible and continue holding the dissolved saliva even after the tablet fully melts until you reach your target time.",
-        "sl.mode.quick": "Quick (2m)",
-        "sl.mode.casual": "Casual (5m)",
-        "sl.mode.standard": "Standard (10m)",
-        "sl.mode.strict": "Strict (15m)",
+        "sl.mode.quick": "2m",
+        "sl.mode.casual": "5m",
+        "sl.mode.standard": "10m",
+        "sl.mode.strict": "15m",
 
         "route.injection": "Injection",
         "route.oral": "Oral",
         "route.sublingual": "Sublingual",
         "route.gel": "Gel",
         "route.patchApply": "Patch Apply",
-        "route.patchRemove": "Patch Remove",
+        "route.patchRemove": "Patch",
 
         "ester.E2": "Estradiol (E2)",
         "ester.EV": "Estradiol Valerate (EV)",
@@ -198,6 +203,11 @@ const getRouteIcon = (route: Route) => {
         case Route.patchApply: return <Sticker className="w-5 h-5 text-orange-500" />;
         case Route.patchRemove: return <X className="w-5 h-5 text-gray-400" />;
     }
+};
+
+const getBioDoseMG = (event: DoseEvent) => {
+    const multiplier = getBioavailabilityMultiplier(event.route, event.ester, event.extras || {});
+    return multiplier * event.doseMG;
 };
 
 // --- Components ---
@@ -258,6 +268,23 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
     const [slTier, setSlTier] = useState(2);
     const [useCustomTheta, setUseCustomTheta] = useState(false);
     const [customTheta, setCustomTheta] = useState("");
+    const [lastEditedField, setLastEditedField] = useState<'raw' | 'bio'>('bio');
+
+    const slExtras = useMemo(() => {
+        if (route !== Route.sublingual) return null;
+        if (useCustomTheta) {
+            const parsed = parseFloat(customTheta);
+            const theta = Number.isFinite(parsed) ? parsed : 0.11;
+            const clamped = Math.max(0, Math.min(1, theta));
+            return { [ExtraKey.sublingualTheta]: clamped };
+        }
+        return { [ExtraKey.sublingualTier]: slTier };
+    }, [route, useCustomTheta, customTheta, slTier]);
+
+    const bioMultiplier = useMemo(() => {
+        const extrasForCalc = slExtras ?? {};
+        return getBioavailabilityMultiplier(route, ester, extrasForCalc);
+    }, [route, ester, slExtras]);
 
     useEffect(() => {
         if (isOpen) {
@@ -273,14 +300,18 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
                     setPatchRate(eventToEdit.extras[ExtraKey.releaseRateUGPerDay].toString());
                     setE2Dose("");
                     setRawDose("");
+                    setLastEditedField('bio');
                 } else {
                     setPatchMode("dose");
-                    setE2Dose(eventToEdit.doseMG.toFixed(3));
+                    const bioValue = getBioDoseMG(eventToEdit).toFixed(3);
+                    setE2Dose(bioValue);
                     if (eventToEdit.ester !== Ester.E2) {
                         const factor = getToE2Factor(eventToEdit.ester);
                         setRawDose((eventToEdit.doseMG / factor).toFixed(3));
+                        setLastEditedField('raw');
                     } else {
                         setRawDose(eventToEdit.doseMG.toFixed(3));
+                        setLastEditedField('bio');
                     }
                 }
 
@@ -288,10 +319,17 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
                     if (eventToEdit.extras[ExtraKey.sublingualTier] !== undefined) {
                          setSlTier(eventToEdit.extras[ExtraKey.sublingualTier]);
                          setUseCustomTheta(false);
+                         setCustomTheta("");
                     } else if (eventToEdit.extras[ExtraKey.sublingualTheta] !== undefined) {
                         setUseCustomTheta(true);
                         setCustomTheta(eventToEdit.extras[ExtraKey.sublingualTheta].toString());
+                    } else {
+                        setUseCustomTheta(false);
+                        setCustomTheta("");
                     }
+                } else {
+                    setUseCustomTheta(false);
+                    setCustomTheta("");
                 }
 
             } else {
@@ -306,16 +344,24 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
                 setPatchRate("");
                 setSlTier(2);
                 setUseCustomTheta(false);
+                setCustomTheta("");
+                setLastEditedField('bio');
             }
         }
     }, [isOpen, eventToEdit]);
 
     const handleRawChange = (val: string) => {
         setRawDose(val);
+        setLastEditedField('raw');
         const v = parseFloat(val);
         if (!isNaN(v)) {
             const factor = getToE2Factor(ester);
-            setE2Dose((v * factor).toFixed(3));
+            const e2Equivalent = v * factor;
+            if (bioMultiplier > 0) {
+                setE2Dose((e2Equivalent * bioMultiplier).toFixed(3));
+            } else {
+                setE2Dose("");
+            }
         } else {
             setE2Dose("");
         }
@@ -323,20 +369,36 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
 
     const handleE2Change = (val: string) => {
         setE2Dose(val);
+        setLastEditedField('bio');
         const v = parseFloat(val);
-        if (!isNaN(v)) {
+        if (!isNaN(v) && bioMultiplier > 0) {
+            const e2Equivalent = v / bioMultiplier;
+            if (ester === Ester.E2) {
+                setRawDose(e2Equivalent.toFixed(3));
+            } else {
+                const factor = getToE2Factor(ester);
+                setRawDose((e2Equivalent / factor).toFixed(3));
+            }
+        } else {
             if (ester === Ester.E2) {
                 setRawDose(val);
             } else {
-                const factor = getToE2Factor(ester);
-                setRawDose((v / factor).toFixed(3));
+                setRawDose("");
             }
         }
     };
 
     useEffect(() => {
-        if (rawDose) handleRawChange(rawDose);
-    }, [ester]);
+        if (lastEditedField === 'raw' && rawDose) {
+            handleRawChange(rawDose);
+        }
+    }, [bioMultiplier, ester, route]);
+
+    useEffect(() => {
+        if (lastEditedField === 'bio' && e2Dose) {
+            handleE2Change(e2Dose);
+        }
+    }, [bioMultiplier, ester, route]);
 
     const handleSave = () => {
         let timeH = new Date(dateStr).getTime() / 3600000;
@@ -344,22 +406,31 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
             timeH = new Date().getTime() / 3600000;
         }
         
-        let finalDose = parseFloat(e2Dose);
-        if (isNaN(finalDose)) finalDose = 0;
+        let bioDoseVal = parseFloat(e2Dose);
+        if (isNaN(bioDoseVal)) bioDoseVal = 0;
+        let finalDose = 0;
 
         const extras: any = {};
+        const nonPositiveMsg = t('error.nonPositive');
 
         if (route === Route.patchApply && patchMode === "rate") {
+            const rateVal = parseFloat(patchRate);
+            if (!Number.isFinite(rateVal) || rateVal <= 0) {
+                alert(nonPositiveMsg);
+                return;
+            }
             finalDose = 0;
-            extras[ExtraKey.releaseRateUGPerDay] = parseFloat(patchRate) || 0;
+            extras[ExtraKey.releaseRateUGPerDay] = rateVal;
+        } else if (route !== Route.patchRemove) {
+            if (!Number.isFinite(bioDoseVal) || bioDoseVal <= 0 || bioMultiplier <= 0) {
+                alert(nonPositiveMsg);
+                return;
+            }
+            finalDose = bioDoseVal / bioMultiplier;
         }
 
-        if (route === Route.sublingual) {
-            if (useCustomTheta) {
-                extras[ExtraKey.sublingualTheta] = parseFloat(customTheta) || 0.11;
-            } else {
-                extras[ExtraKey.sublingualTier] = slTier;
-            }
+        if (route === Route.sublingual && slExtras) {
+            Object.assign(extras, slExtras);
         }
 
         const newEvent: DoseEvent = {
@@ -397,9 +468,12 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
     const tierKey = SL_TIER_ORDER[slTier] || "standard";
     const currentTheta = SublingualTierParams[tierKey]?.theta || 0.11;
 
-    const activeTheta = useCustomTheta ? (parseFloat(customTheta) || 0) : currentTheta;
-    const doseVal = parseFloat(e2Dose) || 0;
-    const effectiveDose = doseVal * (activeTheta + (1 - activeTheta) * 0.03);
+    const activeTheta = useCustomTheta
+        ? (slExtras && slExtras[ExtraKey.sublingualTheta] !== undefined
+            ? slExtras[ExtraKey.sublingualTheta]!
+            : 0.11)
+        : currentTheta;
+    const bioDoseVal = parseFloat(e2Dose) || 0;
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
@@ -500,7 +574,7 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
                                     )}
                                     <div className={`space-y-2 ${ester === Ester.E2 ? "col-span-2" : ""}`}>
                                         <label className="block text-xs font-bold text-pink-400 uppercase tracking-wider">
-                                            {ester === Ester.E2 ? t('field.dose_raw') : t('field.dose_e2')}
+                                            {t('field.dose_e2')}
                                         </label>
                                         <input 
                                             type="number" inputMode="decimal"
@@ -548,15 +622,16 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
                                                 <span>{t('sl.mode.strict')}</span>
                                             </div>
                                             <div className="text-xs text-teal-600 bg-white/50 p-2 rounded-lg flex justify-between items-center">
-                                                <span>Absorption θ ≈ {currentTheta}</span>
-                                                <span className="font-bold" title="Estimated Bioavailable Dose">Eff. ≈ {effectiveDose.toFixed(3)} mg</span>
+                                                <span>Absorption θ ≈ {currentTheta.toFixed(2)}</span>
+                                                <span className="font-bold" title="Estimated Bioavailable Dose">Bio ≈ {bioDoseVal.toFixed(3)} mg</span>
                                             </div>
                                         </div>
                                     ) : (
                                         <div className="space-y-2">
                                             <input type="number" step="0.01" max="1" min="0" value={customTheta} onChange={e => setCustomTheta(e.target.value)} className="w-full p-3 border border-teal-200 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none" placeholder="0.0 - 1.0" />
-                                            <div className="text-xs text-teal-600 bg-white/50 p-2 rounded-lg flex justify-end">
-                                                <span className="font-bold" title="Estimated Bioavailable Dose">Eff. ≈ {effectiveDose.toFixed(3)} mg</span>
+                                            <div className="text-xs text-teal-600 bg-white/50 p-2 rounded-lg flex justify-between items-center">
+                                                <span>Absorption θ ≈ {activeTheta.toFixed(2)}</span>
+                                                <span className="font-bold" title="Estimated Bioavailable Dose">Bio ≈ {bioDoseVal.toFixed(3)} mg</span>
                                             </div>
                                         </div>
                                     )}
@@ -1117,8 +1192,8 @@ const AppContent = () => {
                                                      <span className="text-gray-700">
                                                         {ev.route === Route.patchRemove ? "" : (
                                                             ev.extras[ExtraKey.releaseRateUGPerDay] 
-                                                            ? `${ev.extras[ExtraKey.releaseRateUGPerDay]} µg/d`
-                                                            : `${ev.doseMG.toFixed(2)} mg (E2)`
+                                                                ? `${ev.extras[ExtraKey.releaseRateUGPerDay]} µg/d`
+                                                                : `${getBioDoseMG(ev).toFixed(2)} ${t('timeline.bio_suffix')}`
                                                         )}
                                                      </span>
                                                 </div>
