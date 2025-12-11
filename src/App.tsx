@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Settings, Plus, Activity, Calendar, Languages, Upload, Download, Trash2, Info, Github } from 'lucide-react';
+import { Settings, Plus, Activity, Calendar, Languages, Upload, Download, Trash2, Info, Github, Cloud } from 'lucide-react';
 import { useTranslation, LanguageProvider } from './contexts/LanguageContext';
 import { useDialog, DialogProvider } from './contexts/DialogContext';
 import { APP_VERSION } from './constants';
-import { DoseEvent, Route, Ester, ExtraKey, SimulationResult, runSimulation, interpolateConcentration, encryptData, decryptData, getToE2Factor } from '../logic';
+import { DoseEvent, Route, Ester, ExtraKey, SimulationResult, runSimulation, interpolateConcentration, encryptData, decryptData, getToE2Factor, SyncConfig, SyncData, syncToCloud, fetchFromCloud } from '../logic';
 import { formatDate, formatTime, getRouteIcon } from './utils/helpers';
 import { Lang } from './i18n/translations';
 import ResultChart from './components/ResultChart';
@@ -15,10 +15,16 @@ import ExportModal from './components/ExportModal';
 import PasswordDisplayModal from './components/PasswordDisplayModal';
 import PasswordInputModal from './components/PasswordInputModal';
 import CustomSelect from './components/CustomSelect';
+import CloudSyncModal from './components/CloudSyncModal';
 
 const AppContent = () => {
     const { t, lang, setLang } = useTranslation();
     const { showDialog } = useDialog();
+
+    // Flag to prevent auto-sync during import
+    const isImportingRef = React.useRef(false);
+    // Debounce timer for sync
+    const syncTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
     const [events, setEvents] = useState<DoseEvent[]>(() => {
         const saved = localStorage.getItem('hrt-events');
@@ -40,6 +46,29 @@ const AppContent = () => {
     const [generatedPassword, setGeneratedPassword] = useState("");
     const [isPasswordDisplayOpen, setIsPasswordDisplayOpen] = useState(false);
     const [isPasswordInputOpen, setIsPasswordInputOpen] = useState(false);
+    const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
+
+    // Cloud sync configuration
+    const [syncConfig, setSyncConfig] = useState(() => {
+        const saved = localStorage.getItem('hrt-sync-config');
+        return saved ? JSON.parse(saved) : {
+            isEnabled: false,
+            syncUrl: '',
+            username: '',
+            password: ''
+        };
+    });
+
+    // Cloud sync status
+    const [syncStatus, setSyncStatus] = useState<{
+        isSyncing: boolean;
+        lastSyncTime: Date | null;
+        lastSyncError: string | null;
+    }>({
+        isSyncing: false,
+        lastSyncTime: null,
+        lastSyncError: null
+    });
 
     const [currentView, setCurrentView] = useState<'home' | 'history' | 'settings'>('home');
     const mainScrollRef = useRef<HTMLDivElement>(null);
@@ -54,14 +83,133 @@ const AppContent = () => {
     ]), []);
 
     useEffect(() => {
-        const shouldLock = isExportModalOpen || isPasswordDisplayOpen || isPasswordInputOpen || isWeightModalOpen || isFormOpen || isImportModalOpen;
+        const shouldLock = isExportModalOpen || isPasswordDisplayOpen || isPasswordInputOpen || isWeightModalOpen || isFormOpen || isImportModalOpen || isCloudSyncModalOpen;
         document.body.style.overflow = shouldLock ? 'hidden' : '';
         return () => { document.body.style.overflow = ''; };
-    }, [isExportModalOpen, isPasswordDisplayOpen, isPasswordInputOpen, isWeightModalOpen, isFormOpen, isImportModalOpen]);
+    }, [isExportModalOpen, isPasswordDisplayOpen, isPasswordInputOpen, isWeightModalOpen, isFormOpen, isImportModalOpen, isCloudSyncModalOpen]);
     const [pendingImportText, setPendingImportText] = useState<string | null>(null);
 
-    useEffect(() => { localStorage.setItem('hrt-events', JSON.stringify(events)); }, [events]);
-    useEffect(() => { localStorage.setItem('hrt-weight', weight.toString()); }, [weight]);
+    // Sync to cloud when data changes
+    const syncDataToCloud = async () => {
+        // Skip sync if we're currently importing from cloud
+        if (isImportingRef.current) {
+            console.log('Skipping auto-sync during import');
+            return;
+        }
+
+        if (!syncConfig.isEnabled) return;
+
+        // Prevent uploading empty data that could overwrite valid cloud data
+        if (events.length === 0) {
+            console.log('Skipping sync: local events is empty, avoiding overwriting cloud data');
+            return;
+        }
+
+        setSyncStatus(prev => ({ ...prev, isSyncing: true, lastSyncError: null }));
+
+        const data: SyncData = {
+            meta: { version: 1, exportedAt: new Date().toISOString() },
+            weight: weight,
+            events: events
+        };
+
+        try {
+            const success = await syncToCloud(syncConfig, data);
+            if (success) {
+                setSyncStatus(prev => ({
+                    ...prev,
+                    isSyncing: false,
+                    lastSyncTime: new Date(),
+                    lastSyncError: null
+                }));
+                console.log('Data synced to cloud successfully');
+            } else {
+                setSyncStatus(prev => ({
+                    ...prev,
+                    isSyncing: false,
+                    lastSyncError: '同步失败，请检查配置'
+                }));
+            }
+        } catch (error) {
+            console.error('Failed to sync data to cloud:', error);
+            setSyncStatus(prev => ({
+                ...prev,
+                isSyncing: false,
+                lastSyncError: '网络错误，同步失败'
+            }));
+        }
+    };
+
+    useEffect(() => {
+        localStorage.setItem('hrt-events', JSON.stringify(events));
+
+        // Debounce sync to avoid multiple rapid uploads
+        if (syncTimerRef.current) {
+            clearTimeout(syncTimerRef.current);
+        }
+        syncTimerRef.current = setTimeout(() => {
+            syncDataToCloud();
+        }, 1000); // Wait 1 second after last change before syncing
+
+        return () => {
+            if (syncTimerRef.current) {
+                clearTimeout(syncTimerRef.current);
+            }
+        };
+    }, [events, syncConfig]);
+
+    useEffect(() => {
+        localStorage.setItem('hrt-weight', weight.toString());
+
+        // Debounce sync to avoid multiple rapid uploads
+        if (syncTimerRef.current) {
+            clearTimeout(syncTimerRef.current);
+        }
+        syncTimerRef.current = setTimeout(() => {
+            syncDataToCloud();
+        }, 1000); // Wait 1 second after last change before syncing
+
+        return () => {
+            if (syncTimerRef.current) {
+                clearTimeout(syncTimerRef.current);
+            }
+        };
+    }, [weight, syncConfig]);
+
+    useEffect(() => { localStorage.setItem('hrt-sync-config', JSON.stringify(syncConfig)); }, [syncConfig]);
+
+    // Load data from cloud on component mount if sync is enabled
+    useEffect(() => {
+        const loadFromCloud = async () => {
+            if (!syncConfig.isEnabled) {
+                console.log('Cloud sync disabled, using local data');
+                return;
+            }
+
+            console.log('=== LOADING FROM CLOUD ON STARTUP ===');
+            isImportingRef.current = true; // Prevent auto-sync during initial load
+
+            try {
+                const cloudData = await fetchFromCloud(syncConfig);
+                if (cloudData && cloudData.events && cloudData.events.length > 0) {
+                    console.log('Cloud data found, loading:', cloudData.events.length, 'events');
+                    setEvents(cloudData.events);
+                    if (cloudData.weight) setWeight(cloudData.weight);
+                } else {
+                    console.log('No cloud data or empty, using local data');
+                }
+            } catch (error) {
+                console.error('Failed to load from cloud:', error);
+            } finally {
+                setTimeout(() => {
+                    isImportingRef.current = false;
+                    console.log('Initial load complete');
+                }, 500);
+            }
+        };
+
+        loadFromCloud();
+    }, []); // Run once on mount
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 60000);
@@ -257,6 +405,65 @@ const AppContent = () => {
         } else {
             showDialog('alert', t('import.decrypt_error'));
         }
+    };
+
+    const handleCloudSyncSave = async (newConfig: SyncConfig) => {
+        const wasEnabled = syncConfig.isEnabled;
+        setSyncConfig(newConfig);
+
+        // If user just enabled sync, fetch data from cloud and overwrite local data
+        if (!wasEnabled && newConfig.isEnabled) {
+            try {
+                const cloudData = await fetchFromCloud(newConfig);
+                if (cloudData) {
+                    if (window.confirm('检测到云端数据，是否用云端数据覆盖本地数据？')) {
+                        setEvents(cloudData.events || []);
+                        setWeight(cloudData.weight || 70.0);
+                        showDialog('alert', '已从云端同步数据');
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to fetch from cloud:', error);
+                showDialog('alert', '从云端获取数据失败，请检查配置');
+            }
+        }
+    };
+
+    const handleImportFromCloud = (data: SyncData) => {
+        console.log('=== IMPORT FROM CLOUD START ===');
+        console.log('Full data received:', JSON.stringify(data, null, 2));
+        console.log('Events array:', data.events, 'Length:', data.events?.length);
+        console.log('Weight value:', data.weight);
+        console.log('Current events before import:', events.length);
+        console.log('Current weight before import:', weight);
+
+        // Set flag to prevent auto-sync during import
+        isImportingRef.current = true;
+        console.log('Set isImportingRef to true');
+
+        if (data.events) {
+            console.log('Setting events to:', data.events);
+            setEvents(data.events);
+        } else {
+            console.warn('No events in cloud data!');
+        }
+        if (data.weight) {
+            console.log('Setting weight to:', data.weight);
+            setWeight(data.weight);
+        } else {
+            console.warn('No weight in cloud data!');
+        }
+
+        // Reset flag after state updates are complete
+        setTimeout(() => {
+            console.log('=== IMPORT TIMEOUT CALLBACK ===');
+            console.log('isImportingRef before reset:', isImportingRef.current);
+            isImportingRef.current = false;
+            console.log('Import complete, auto-sync re-enabled');
+        }, 100);
+
+        showDialog('alert', '已从云端导入数据');
+        console.log('=== IMPORT FROM CLOUD END ===');
     };
 
     return (
@@ -478,6 +685,34 @@ const AppContent = () => {
                                             <p className="text-xs text-gray-500">{t('drawer.clear_confirm')}</p>
                                         </div>
                                     </button>
+
+                                    <button
+                                        onClick={() => setIsCloudSyncModalOpen(true)}
+                                        className="w-full flex items-center gap-3 px-4 py-4 hover:bg-blue-50 transition text-left"
+                                    >
+                                        <div className="relative">
+                                            <Cloud className="text-blue-500" size={20} />
+                                            {syncStatus.isSyncing && (
+                                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                                            )}
+                                        </div>
+                                        <div className="text-left flex-1">
+                                            <p className="font-bold text-gray-900 text-sm">云端同步</p>
+                                            <p className="text-xs text-gray-500">
+                                                {syncConfig.isEnabled ? (
+                                                    syncStatus.lastSyncError ? (
+                                                        <span className="text-red-500">{syncStatus.lastSyncError}</span>
+                                                    ) : syncStatus.lastSyncTime ? (
+                                                        `上次同步: ${syncStatus.lastSyncTime.toLocaleString()}`
+                                                    ) : (
+                                                        '设置云端数据同步'
+                                                    )
+                                                ) : (
+                                                    '设置云端数据同步'
+                                                )}
+                                            </p>
+                                        </div>
+                                    </button>
                                 </div>
                             </div>
 
@@ -609,6 +844,14 @@ const AppContent = () => {
                     const ok = importEventsFromJson(payload);
                     return ok;
                 }}
+            />
+
+            <CloudSyncModal
+                isOpen={isCloudSyncModalOpen}
+                onClose={() => setIsCloudSyncModalOpen(false)}
+                currentConfig={syncConfig}
+                onSave={handleCloudSyncSave}
+                onImportFromCloud={handleImportFromCloud}
             />
         </div>
     );

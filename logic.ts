@@ -492,3 +492,97 @@ export async function decryptData(jsonString: string, password: string): Promise
         return null;
     }
 }
+
+// --- Cloud Sync API Functions ---
+
+export interface SyncConfig {
+    isEnabled: boolean;
+    syncUrl: string;
+    username: string;
+    password: string;
+}
+
+export interface SyncData {
+    meta: {
+        version: number;
+        exportedAt: string;
+    };
+    weight: number;
+    events: DoseEvent[];
+}
+
+export async function syncToCloud(syncConfig: SyncConfig, data: SyncData): Promise<boolean> {
+    if (!syncConfig.isEnabled || !syncConfig.syncUrl || !syncConfig.username || !syncConfig.password) {
+        return false;
+    }
+
+    console.log('=== SYNC TO CLOUD ===');
+    console.log('Data being uploaded:', JSON.stringify(data, null, 2));
+    console.log('Events count:', data.events?.length);
+
+    try {
+        const auth = btoa(`${syncConfig.username}:${syncConfig.password}`);
+        const url = syncConfig.syncUrl.endsWith('/') ? `${syncConfig.syncUrl}sync/data` : `${syncConfig.syncUrl}/sync/data`;
+        const response = await fetch(url, {
+            method: 'POST',
+            mode: 'cors',
+            headers: {
+                'Authorization': `Basic ${auth}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            console.error('Cloud sync failed:', response.status, response.statusText);
+            return false;
+        }
+
+        const result = await response.text();
+        if (result !== 'Stored') {
+            console.error('Unexpected response from cloud:', result);
+            return false;
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Cloud sync error:', error);
+        return false;
+    }
+}
+
+export async function fetchFromCloud(syncConfig: SyncConfig): Promise<SyncData | null> {
+    if (!syncConfig.isEnabled || !syncConfig.syncUrl || !syncConfig.username || !syncConfig.password) {
+        return null;
+    }
+
+    try {
+        const auth = btoa(`${syncConfig.username}:${syncConfig.password}`);
+        console.log('Fetching from cloud with username:', syncConfig.username);
+        console.log('Auth header:', `Basic ${auth}`);
+        const url = syncConfig.syncUrl.endsWith('/') ? `${syncConfig.syncUrl}sync/data` : `${syncConfig.syncUrl}/sync/data`;
+        const response = await fetch(url, {
+            method: 'GET',
+            mode: 'cors',
+            headers: {
+                'Authorization': `Basic ${auth}`
+            }
+        });
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                // No data stored yet, return null
+                return null;
+            }
+            console.error('Cloud fetch failed:', response.status, response.statusText);
+            return null;
+        }
+
+        const data = await response.json();
+        console.log('Fetched data from cloud:', data);
+        return data as SyncData;
+    } catch (error) {
+        console.error('Cloud fetch error:', error);
+        return null;
+    }
+}
