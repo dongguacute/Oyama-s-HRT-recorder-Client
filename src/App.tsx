@@ -507,7 +507,7 @@ const AppContent = () => {
                             console.log('Updated lastLocalModificationRef to:', cloudData.meta.exportedAt);
                         }
 
-                        showDialog('alert', '已从云端同步数据');
+                        showDialog('alert', t('cloud.sync_success'));
                     }
                 }
             } catch (error) {
@@ -782,7 +782,7 @@ const AppContent = () => {
                                             )}
                                         </div>
                                         <div className="text-left flex-1">
-                                            <p className="font-bold text-gray-900 text-sm">云端同步</p>
+                                            <p className="font-bold text-gray-900 text-sm">{t('cloud.sync_title')}</p>
                                             <p className="text-xs text-gray-500">
                                                 {syncConfig.isEnabled ? (
                                                     syncStatus.lastSyncError ? (

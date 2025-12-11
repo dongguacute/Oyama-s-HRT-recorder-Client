@@ -30,7 +30,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
 
     const handleTestConnection = async () => {
         if (!config.syncUrl || !config.username || !config.password) {
-            setTestResult({ success: false, message: '请填写所有字段' });
+            setTestResult({ success: false, message: t('cloud.fill_all_fields') });
             return;
         }
 
@@ -40,12 +40,12 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
         try {
             const data = await fetchFromCloud(config);
             if (data) {
-                setTestResult({ success: true, message: '连接成功，可以获取云端数据' });
+                setTestResult({ success: true, message: t('cloud.connection_success_data') });
             } else {
-                setTestResult({ success: true, message: '连接成功，云端暂无数据' });
+                setTestResult({ success: true, message: t('cloud.connection_success_no_data') });
             }
         } catch (error) {
-            setTestResult({ success: false, message: '连接失败，请检查配置' });
+            setTestResult({ success: false, message: t('cloud.connection_failed') });
         } finally {
             setIsTesting(false);
         }
@@ -53,7 +53,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
 
     const handleImportFromCloud = async () => {
         if (!config.syncUrl || !config.username || !config.password) {
-            setTestResult({ success: false, message: '请填写所有字段' });
+            setTestResult({ success: false, message: t('cloud.fill_all_fields') });
             return;
         }
 
@@ -64,15 +64,15 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
             const data = await fetchFromCloud(config);
             if (data) {
                 // 确认覆盖本地数据
-                if (window.confirm('⚠️ 这将用云端数据覆盖所有本地数据，确定继续吗？')) {
+                if (window.confirm(t('cloud.confirm_overwrite'))) {
                     onImportFromCloud(data);
-                    setTestResult({ success: true, message: '已从云端导入数据' });
+                    setTestResult({ success: true, message: t('cloud.import_success') });
                 }
             } else {
-                setTestResult({ success: false, message: '云端暂无数据' });
+                setTestResult({ success: false, message: t('cloud.no_data') });
             }
         } catch (error) {
-            setTestResult({ success: false, message: '导入失败，请检查配置' });
+            setTestResult({ success: false, message: t('cloud.import_failed') });
         } finally {
             setIsTesting(false);
         }
@@ -87,7 +87,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                 <div className="flex items-center justify-between p-6 border-b border-gray-100">
                     <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
                         <Cloud size={24} className="text-blue-500" />
-                        云端同步设置
+                        {t('cloud.settings_title')}
                     </h2>
                     <button
                         onClick={onClose}
@@ -101,7 +101,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                 <div className="p-6 space-y-4">
                     {/* Enable Toggle */}
                     <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-900">启用云端同步</span>
+                        <span className="font-medium text-gray-900">{t('cloud.enable_sync')}</span>
                         <label className="relative inline-flex items-center cursor-pointer">
                             <input
                                 type="checkbox"
@@ -116,7 +116,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                     {/* URL Input */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                            云端地址
+                            {t('cloud.url_label')}
                         </label>
                         <input
                             type="url"
@@ -130,7 +130,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                     {/* Username Input */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                            用户名
+                            {t('cloud.username_label')}
                         </label>
                         <input
                             type="text"
@@ -144,7 +144,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                     {/* Password Input */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                            密码
+                            {t('cloud.password_label')}
                         </label>
                         <input
                             type="password"
@@ -165,12 +165,12 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                             {isTesting ? (
                                 <>
                                     <Loader size={16} className="animate-spin" />
-                                    测试连接中...
+                                    {t('cloud.testing_connection')}
                                 </>
                             ) : (
                                 <>
                                     <Cloud size={16} />
-                                    测试连接
+                                    {t('cloud.test_connection')}
                                 </>
                             )}
                         </button>
@@ -201,17 +201,17 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                                 {isTesting ? (
                                     <>
                                         <Loader size={16} className="animate-spin" />
-                                        导入中...
+                                        {t('cloud.importing')}
                                     </>
                                 ) : (
                                     <>
                                         <Cloud size={16} />
-                                        从云端导入数据
+                                        {t('cloud.import_data')}
                                     </>
                                 )}
                             </button>
                             <p className="text-xs text-gray-500 mt-1 text-center">
-                                ⚠️ 这将覆盖所有本地数据
+                                {t('cloud.warning_overwrite')}
                             </p>
                         </div>
                     )}
@@ -223,13 +223,13 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                         onClick={onClose}
                         className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
                     >
-                        取消
+                        {t('btn.cancel')}
                     </button>
                     <button
                         onClick={handleSave}
                         className="flex-1 px-4 py-2 text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition"
                     >
-                        保存
+                        {t('btn.save')}
                     </button>
                 </div>
             </div>
