@@ -25,6 +25,8 @@ const AppContent = () => {
     const isImportingRef = React.useRef(false);
     // Debounce timer for sync
     const syncTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+    // Flag to track if initial load is complete
+    const initialLoadCompleteRef = React.useRef(false);
 
     const [events, setEvents] = useState<DoseEvent[]>(() => {
         const saved = localStorage.getItem('hrt-events');
@@ -70,6 +72,9 @@ const AppContent = () => {
         lastSyncError: null
     });
 
+    // Track the last local modification time to avoid overwriting local changes
+    const lastLocalModificationRef = React.useRef<string>(new Date().toISOString());
+
     const [currentView, setCurrentView] = useState<'home' | 'history' | 'settings'>('home');
     const mainScrollRef = useRef<HTMLDivElement>(null);
 
@@ -99,16 +104,20 @@ const AppContent = () => {
 
         if (!syncConfig.isEnabled) return;
 
-        // Prevent uploading empty data that could overwrite valid cloud data
-        if (events.length === 0) {
-            console.log('Skipping sync: local events is empty, avoiding overwriting cloud data');
+        // Prevent uploading empty data ONLY during initial load (before initialLoadCompleteRef is set)
+        // After initial load, allow syncing empty data (user intentionally cleared all data)
+        if (events.length === 0 && !initialLoadCompleteRef.current) {
+            console.log('Skipping sync: initial load not complete, avoiding overwriting cloud data');
             return;
         }
 
         setSyncStatus(prev => ({ ...prev, isSyncing: true, lastSyncError: null }));
 
+        const exportedAt = new Date().toISOString();
+        lastLocalModificationRef.current = exportedAt; // Update local modification time
+
         const data: SyncData = {
-            meta: { version: 1, exportedAt: new Date().toISOString() },
+            meta: { version: 1, exportedAt },
             weight: weight,
             events: events
         };
@@ -183,6 +192,7 @@ const AppContent = () => {
         const loadFromCloud = async () => {
             if (!syncConfig.isEnabled) {
                 console.log('Cloud sync disabled, using local data');
+                initialLoadCompleteRef.current = true; // Mark initial load as complete
                 return;
             }
 
@@ -194,15 +204,28 @@ const AppContent = () => {
                 if (cloudData && cloudData.events && cloudData.events.length > 0) {
                     console.log('Cloud data found, loading:', cloudData.events.length, 'events');
                     setEvents(cloudData.events);
-                    if (cloudData.weight) setWeight(cloudData.weight);
+                    setWeight(cloudData.weight ?? 70.0);
+
+                    // Update local modification time to cloud time
+                    if (cloudData.meta && cloudData.meta.exportedAt) {
+                        lastLocalModificationRef.current = cloudData.meta.exportedAt;
+                        console.log('Updated lastLocalModificationRef to:', cloudData.meta.exportedAt);
+                    }
+                } else if (cloudData && cloudData.meta && cloudData.meta.exportedAt) {
+                    // Cloud data exists but is empty - still need to sync time
+                    console.log('Cloud data is empty');
+                    setEvents([]);
+                    setWeight(cloudData.weight ?? 70.0);
+                    lastLocalModificationRef.current = cloudData.meta.exportedAt;
                 } else {
-                    console.log('No cloud data or empty, using local data');
+                    console.log('No cloud data, using local data');
                 }
             } catch (error) {
                 console.error('Failed to load from cloud:', error);
             } finally {
                 setTimeout(() => {
                     isImportingRef.current = false;
+                    initialLoadCompleteRef.current = true; // Mark initial load as complete
                     console.log('Initial load complete');
                 }, 500);
             }
@@ -210,6 +233,63 @@ const AppContent = () => {
 
         loadFromCloud();
     }, []); // Run once on mount
+
+    // Poll cloud data periodically to detect changes from other devices
+    useEffect(() => {
+        if (!syncConfig.isEnabled) return;
+
+        const pollInterval = setInterval(async () => {
+            // Skip if we're currently syncing or importing
+            if (isImportingRef.current || syncStatus.isSyncing) {
+                console.log('Skipping poll: already syncing or importing');
+                return;
+            }
+
+            // Skip if there's a pending sync (debounce timer is active)
+            if (syncTimerRef.current) {
+                console.log('Skipping poll: local changes pending sync');
+                return;
+            }
+
+            console.log('=== POLLING CLOUD DATA ===');
+            try {
+                const cloudData = await fetchFromCloud(syncConfig);
+                if (cloudData && cloudData.meta && cloudData.meta.exportedAt) {
+                    const cloudTime = cloudData.meta.exportedAt;
+                    const localTime = lastLocalModificationRef.current;
+
+                    console.log('Cloud time:', cloudTime);
+                    console.log('Local time:', localTime);
+                    console.log('Cloud events count:', cloudData.events?.length ?? 0);
+
+                    // If cloud data is newer than local, overwrite local UNCONDITIONALLY
+                    if (cloudTime > localTime) {
+                        console.log('Cloud data is newer, updating local data');
+                        isImportingRef.current = true; // Prevent triggering upload
+
+                        // Always set events and weight, even if they're empty/default
+                        // This ensures deletions are synced properly
+                        setEvents(cloudData.events || []);
+                        setWeight(cloudData.weight ?? 70.0);
+
+                        // Update local modification time to cloud time
+                        lastLocalModificationRef.current = cloudTime;
+
+                        setTimeout(() => {
+                            isImportingRef.current = false;
+                            console.log('Auto-sync from cloud complete');
+                        }, 100);
+                    } else {
+                        console.log('Local data is up to date');
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to poll cloud data:', error);
+            }
+        }, 30000); // Poll every 30 seconds
+
+        return () => clearInterval(pollInterval);
+    }, [syncConfig.isEnabled, syncConfig.syncUrl, syncConfig.username, syncConfig.password, syncStatus.isSyncing]);
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 60000);
@@ -417,8 +497,16 @@ const AppContent = () => {
                 const cloudData = await fetchFromCloud(newConfig);
                 if (cloudData) {
                     if (window.confirm('检测到云端数据，是否用云端数据覆盖本地数据？')) {
+                        // Unconditionally set events and weight from cloud
                         setEvents(cloudData.events || []);
-                        setWeight(cloudData.weight || 70.0);
+                        setWeight(cloudData.weight ?? 70.0);
+
+                        // Update local modification time to cloud time
+                        if (cloudData.meta && cloudData.meta.exportedAt) {
+                            lastLocalModificationRef.current = cloudData.meta.exportedAt;
+                            console.log('Updated lastLocalModificationRef to:', cloudData.meta.exportedAt);
+                        }
+
                         showDialog('alert', '已从云端同步数据');
                     }
                 }
@@ -432,7 +520,7 @@ const AppContent = () => {
     const handleImportFromCloud = (data: SyncData) => {
         console.log('=== IMPORT FROM CLOUD START ===');
         console.log('Full data received:', JSON.stringify(data, null, 2));
-        console.log('Events array:', data.events, 'Length:', data.events?.length);
+        console.log('Events array:', data.events, 'Length:', data.events?.length ?? 0);
         console.log('Weight value:', data.weight);
         console.log('Current events before import:', events.length);
         console.log('Current weight before import:', weight);
@@ -441,17 +529,14 @@ const AppContent = () => {
         isImportingRef.current = true;
         console.log('Set isImportingRef to true');
 
-        if (data.events) {
-            console.log('Setting events to:', data.events);
-            setEvents(data.events);
-        } else {
-            console.warn('No events in cloud data!');
-        }
-        if (data.weight) {
-            console.log('Setting weight to:', data.weight);
-            setWeight(data.weight);
-        } else {
-            console.warn('No weight in cloud data!');
+        // Unconditionally set events and weight from cloud data
+        setEvents(data.events || []);
+        setWeight(data.weight ?? 70.0);
+
+        // Update local modification time to cloud time
+        if (data.meta && data.meta.exportedAt) {
+            lastLocalModificationRef.current = data.meta.exportedAt;
+            console.log('Updated lastLocalModificationRef to:', data.meta.exportedAt);
         }
 
         // Reset flag after state updates are complete
