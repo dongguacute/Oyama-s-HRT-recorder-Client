@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from '../contexts/LanguageContext';
 import { formatDate, formatTime } from '../utils/helpers';
-import { SimulationResult, DoseEvent } from '../../logic';
+import { SimulationResult, DoseEvent, interpolateConcentration } from '../../logic';
 import { Activity, RotateCcw } from 'lucide-react';
 import {
-    XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, ComposedChart, Scatter
+    XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, AreaChart, ComposedChart, Scatter, Brush
 } from 'recharts';
 
 const CustomTooltip = ({ active, payload, label, t, lang }: any) => {
@@ -69,27 +69,18 @@ const ResultChart = ({ sim, events, onPointClick }: { sim: SimulationResult | nu
         };
     }, [data]);
 
+    const nowPoint = useMemo(() => {
+        if (!sim || data.length === 0) return null;
+        const conc = interpolateConcentration(sim, now / 3600000);
+        if (conc === null || Number.isNaN(conc)) return null;
+        return { time: now, conc };
+    }, [sim, data, now]);
+
     // Slider helpers for quick panning (helps mobile users)
-    const visibleWidth = useMemo(() => {
-        if (!xDomain) return Math.max(maxTime - minTime, 1);
-        return Math.max(xDomain[1] - xDomain[0], 1);
-    }, [xDomain, minTime, maxTime]);
-    const sliderMin = minTime;
-    const sliderMax = Math.max(maxTime - visibleWidth, sliderMin);
-    const sliderValue = xDomain ? xDomain[0] : minTime;
-
-    const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const v = Number(e.target.value);
-        if (Number.isNaN(v)) return;
-        const start = Math.max(sliderMin, Math.min(v, sliderMax));
-        const end = start + visibleWidth;
-        setXDomain([start, end]);
-    };
-
     // Initialize view: center on "now" with a reasonable window (e.g. 14 days)
     useEffect(() => {
         if (!initializedRef.current && data.length > 0) {
-            const initialWindow = 14 * 24 * 3600 * 1000; // 2 weeks
+            const initialWindow = 7 * 24 * 3600 * 1000; // 1 week
             const start = Math.max(minTime, now - initialWindow / 2);
             const end = Math.min(maxTime, start + initialWindow);
             
@@ -134,6 +125,37 @@ const ResultChart = ({ sim, events, onPointClick }: { sim: SimulationResult | nu
         setXDomain(clampDomain([start, end]));
     };
 
+    const findClosestIndex = (time: number) => {
+        if (data.length === 0) return 0;
+        let low = 0;
+        let high = data.length - 1;
+        while (high - low > 1) {
+            const mid = Math.floor((low + high) / 2);
+            if (data[mid].time === time) return mid;
+            if (data[mid].time < time) low = mid;
+            else high = mid;
+        }
+        return Math.abs(data[high].time - time) < Math.abs(data[low].time - time) ? high : low;
+    };
+
+    const brushRange = useMemo(() => {
+        if (data.length === 0) return { startIndex: 0, endIndex: 0 };
+        const domain = xDomain || [minTime, maxTime];
+        const startIndex = findClosestIndex(domain[0]);
+        const endIndexRaw = findClosestIndex(domain[1]);
+        const endIndex = Math.max(startIndex + 1, endIndexRaw);
+        return { startIndex, endIndex: Math.min(data.length - 1, endIndex) };
+    }, [data, xDomain, minTime, maxTime]);
+
+    const handleBrushChange = (range: { startIndex?: number; endIndex?: number }) => {
+        if (!range || range.startIndex === undefined || range.endIndex === undefined || data.length === 0) return;
+        const startIndex = Math.max(0, Math.min(range.startIndex, data.length - 1));
+        const endIndex = Math.max(startIndex + 1, Math.min(range.endIndex, data.length - 1));
+        const start = data[startIndex].time;
+        const end = data[endIndex].time;
+        setXDomain(clampDomain([start, end]));
+    };
+
     if (!sim || sim.timeH.length === 0) return (
         <div className="h-72 md:h-96 flex flex-col items-center justify-center text-gray-400 bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
             <Activity className="w-12 h-12 mb-4 text-gray-200" strokeWidth={1.5} />
@@ -165,7 +187,7 @@ const ResultChart = ({ sim, events, onPointClick }: { sim: SimulationResult | nu
                     <div className="w-px h-4 bg-gray-200 self-center mx-1"></div>
                     <button
                         onClick={() => {
-                            setXDomain(clampDomain([minTime, maxTime]));
+                            zoomToDuration(7);
                         }}
                         className="p-1.5 text-gray-600 rounded-lg hover:bg-white transition-all"
                     >
@@ -178,7 +200,7 @@ const ResultChart = ({ sim, events, onPointClick }: { sim: SimulationResult | nu
                 ref={containerRef}
                 className="h-64 md:h-80 lg:h-96 w-full touch-none relative select-none px-2 pb-2">
                 <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart margin={{ top: 12, right: 8, bottom: 0, left: -12 }}>
+                    <ComposedChart data={data} margin={{ top: 12, right: 8, bottom: 0, left: -12 }}>
                         <defs>
                             <linearGradient id="colorConc" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#f6c4d7" stopOpacity={0.18}/>
@@ -222,6 +244,26 @@ const ResultChart = ({ sim, events, onPointClick }: { sim: SimulationResult | nu
                             activeDot={{ r: 6, strokeWidth: 3, stroke: '#fff', fill: '#ec4899' }} 
                         />
                         <Scatter 
+                            data={nowPoint ? [nowPoint] : []}
+                            isAnimationActive={false}
+                            shape={({ cx, cy, payload }: any) => {
+                                const conc = payload?.conc ?? 0;
+                                const radius = Math.min(7, Math.max(3, Math.sqrt(Math.max(conc, 0)) * 0.25));
+                                return (
+                                    <g className="group">
+                                        <circle cx={cx} cy={cy} r={1} fill="transparent" />
+                                        <circle 
+                                            cx={cx} cy={cy} 
+                                            r={radius} 
+                                            fill="#bfdbfe" 
+                                            stroke="white" 
+                                            strokeWidth={1.5} 
+                                        />
+                                    </g>
+                                );
+                            }}
+                        />
+                        <Scatter 
                             data={eventPoints} 
                             isAnimationActive={false}
                             shape={(props: any) => {
@@ -247,17 +289,55 @@ const ResultChart = ({ sim, events, onPointClick }: { sim: SimulationResult | nu
                     </ComposedChart>
                 </ResponsiveContainer>
             </div>
-            {/* Compact external slider for precise panning (mobile friendly) */}
+            {/* Overview mini-map with draggable handles */}
             {data.length > 1 && (
-                <div className="mt-2 px-4 pb-3">
-                    <input
-                        type="range"
-                        min={String(sliderMin)}
-                        max={String(sliderMax)}
-                        value={String(sliderValue)}
-                        onChange={handleSliderChange}
-                        className="w-full accent-pink-300 h-1.5 rounded-full bg-gray-100"
-                    />
+                <div className="px-3 pb-4 mt-1">
+                    <div className="w-full h-16 bg-gray-50/80 border border-gray-100 rounded-none shadow-inner overflow-hidden">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={data} margin={{ top: 6, right: 8, left: -6, bottom: 6 }}>
+                                <defs>
+                                    <linearGradient id="overviewConc" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#bfdbfe" stopOpacity={0.28}/>
+                                        <stop offset="95%" stopColor="#bfdbfe" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <XAxis
+                                    dataKey="time"
+                                    type="number"
+                                    hide
+                                    domain={[minTime, maxTime]}
+                                />
+                                <YAxis dataKey="conc" hide />
+                                <Area
+                                    type="monotone"
+                                    dataKey="conc"
+                                    stroke="#bfdbfe"
+                                    strokeWidth={1.2}
+                                    fill="url(#overviewConc)"
+                                    isAnimationActive={false}
+                                />
+                                <Brush
+                                    dataKey="time"
+                                    height={22}
+                                    stroke="#bfdbfe"
+                                    startIndex={brushRange.startIndex}
+                                    endIndex={brushRange.endIndex}
+                                    travellerWidth={10}
+                                    tickFormatter={(ms) => formatDate(new Date(ms), lang)}
+                                    onChange={handleBrushChange}
+                                >
+                                    <Area
+                                        type="monotone"
+                                        dataKey="conc"
+                                        stroke="#93c5fd"
+                                        fill="#bfdbfe"
+                                        fillOpacity={0.15}
+                                        isAnimationActive={false}
+                                    />
+                                </Brush>
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
             )}
         </div>

@@ -625,7 +625,13 @@ const AppContent = () => {
                                     <h2 className="text-xl font-semibold text-gray-900 tracking-tight flex items-center gap-3">
                                        <Activity size={22} className="text-[#f6c4d7]" /> {t('timeline.title')}
                                     </h2>
-                                    <div className="min-w-[136px] h-11" />
+                                    <button
+                                        onClick={handleAddEvent}
+                                        className="inline-flex items-center justify-center gap-2 px-3.5 py-2 h-11 rounded-xl bg-gray-900 text-white text-sm font-bold shadow-sm hover:shadow-md transition"
+                                    >
+                                        <Plus size={16} />
+                                        <span>{t('btn.add')}</span>
+                                    </button>
                                 </div>
                             </div>
 
@@ -688,16 +694,6 @@ const AppContent = () => {
                                 </div>
                             ))}
                             
-                            {/* Floating action button above bottom nav */}
-                            <div className="fixed left-1/2 bottom-28 -translate-x-1/2 z-30 w-full max-w-md px-4 pointer-events-none">
-                                <button
-                                    onClick={handleAddEvent}
-                                    className="pointer-events-auto w-full bg-gray-900 text-white px-4 py-3 rounded-full flex items-center justify-center gap-2 shadow-lg shadow-gray-300/60 hover:translate-y-[-2px] active:translate-y-0 transition-transform"
-                                >
-                                    <Plus size={18} />
-                                    <span className="font-bold text-sm">{t('btn.add')}</span>
-                                </button>
-                            </div>
                         </div>
                     )}
 
